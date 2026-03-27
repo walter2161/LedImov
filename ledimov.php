@@ -8,10 +8,10 @@
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'LEDIMOV_VERSION', '2.1.0' );
-define( 'LEDIMOV_FILE',    __FILE__ );
-define( 'LEDIMOV_DIR',     plugin_dir_path( __FILE__ ) );
-define( 'LEDIMOV_URL',     plugin_dir_url( __FILE__ ) );
+defined( 'LEDIMOV_VERSION' ) || define( 'LEDIMOV_VERSION', '2.1.0' );
+defined( 'LEDIMOV_FILE' )    || define( 'LEDIMOV_FILE',    __FILE__ );
+defined( 'LEDIMOV_DIR' )     || define( 'LEDIMOV_DIR',     plugin_dir_path( __FILE__ ) );
+defined( 'LEDIMOV_URL' )     || define( 'LEDIMOV_URL',     plugin_dir_url( __FILE__ ) );
 
 /* ============================================================
    1. ATIVAÇÃO / DESATIVAÇÃO
