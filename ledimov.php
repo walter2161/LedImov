@@ -287,6 +287,17 @@ function ledimov_get_company() {
         'color_secondary'=>get_option('ledimov_company_color_secondary','#0e9f6e'),
     );
 }
+/* ── Template Engine ── */
+function ledimov_has_tpl($key){return(bool)get_option('ledimov_tpl_'.$key,'');}
+function ledimov_get_tpl($key){return get_option('ledimov_tpl_'.$key,'');}
+function ledimov_eval_tpl($code,$vars=[]){
+    extract($vars,EXTR_SKIP);
+    ob_start();
+    try{eval('?>'.$code);}
+    catch(Throwable $e){ob_end_clean();return '<div style="background:#fdecea;color:#7b241c;padding:14px 18px;border-radius:8px;font-size:13px;margin:12px 0;font-family:monospace;"><strong>Erro no template:</strong> '.esc_html($e->getMessage()).'</div>';}
+    return ob_get_clean();
+}
+
 function ledimov_get_gallery( $ref_type, $ref_id ) {
     global $wpdb; $gt = $wpdb->prefix.'ledimov_gallery';
     return $wpdb->get_results( $wpdb->prepare("SELECT * FROM {$gt} WHERE ref_type=%s AND ref_id=%d ORDER BY sort_order ASC", $ref_type, (int)$ref_id));
@@ -316,6 +327,11 @@ function ledimov_admin_assets( $hook ) {
     add_action( 'admin_head', 'ledimov_inline_css' );
     add_action( 'admin_footer', 'ledimov_inline_js' );
     wp_enqueue_media(); wp_enqueue_script( 'jquery' ); wp_enqueue_script( 'jquery-ui-sortable' );
+    if(isset($_GET['page'])&&$_GET['page']==='ledimov-templates'){
+        wp_enqueue_code_editor(array('type'=>'application/x-httpd-php'));
+        wp_enqueue_script('wp-theme-plugin-editor');
+        wp_enqueue_style('wp-codemirror');
+    }
 }
 
 function ledimov_inject_globals() {
@@ -636,6 +652,46 @@ function ledimov_ajax_force_migrate(){if(!wp_verify_nonce($_POST['nonce']??'','l
 add_action('wp_ajax_ledimov_run_seed','ledimov_ajax_run_seed');
 function ledimov_ajax_run_seed(){if(!wp_verify_nonce($_POST['nonce']??'','ledimov_nonce'))wp_send_json_error('Nonce inválido');if(!current_user_can('manage_options'))wp_send_json_error('Sem permissão');delete_option('ledimov_seeded_v1');ledimov_maybe_seed();wp_send_json_success(array('msg'=>'✅ Empreendimento de exemplo criado!'));}
 
+/* ── Template Editor AJAX ── */
+add_action('wp_ajax_ledimov_save_tpl','ledimov_ajax_save_tpl');
+function ledimov_ajax_save_tpl(){
+    check_ajax_referer('ledimov_nonce','nonce');
+    if(!current_user_can('manage_options'))wp_send_json_error('Sem permissão');
+    $allowed=['card_imovel','area_corretor','vitrine','destaque','tabela','mapa'];
+    $key=sanitize_key($_POST['key']??'');
+    if(!in_array($key,$allowed))wp_send_json_error('Chave inválida');
+    $code=wp_unslash($_POST['code']??'');
+    update_option('ledimov_tpl_'.$key,$code,false);
+    wp_send_json_success('Template salvo!');
+}
+
+add_action('wp_ajax_ledimov_reset_tpl','ledimov_ajax_reset_tpl');
+function ledimov_ajax_reset_tpl(){
+    check_ajax_referer('ledimov_nonce','nonce');
+    if(!current_user_can('manage_options'))wp_send_json_error('Sem permissão');
+    $key=sanitize_key($_POST['key']??'');
+    delete_option('ledimov_tpl_'.$key);
+    wp_send_json_success('Template restaurado ao padrão!');
+}
+
+add_action('wp_ajax_ledimov_get_default_tpl','ledimov_ajax_get_default_tpl');
+function ledimov_ajax_get_default_tpl(){
+    check_ajax_referer('ledimov_nonce','nonce');
+    if(!current_user_can('manage_options'))wp_send_json_error('Sem permissão');
+    $map=['card_imovel'=>'ledimov_sc_card_imovel','area_corretor'=>'ledimov_sc_area_corretor','vitrine'=>'ledimov_sc_vitrine','destaque'=>'ledimov_sc_destaque','tabela'=>'ledimov_sc_tabela','mapa'=>'ledimov_sc_mapa'];
+    $key=sanitize_key($_POST['key']??'');
+    if(!isset($map[$key]))wp_send_json_error('Chave inválida');
+    $fn=$map[$key];
+    if(!function_exists($fn))wp_send_json_error('Função não encontrada');
+    $rf=new ReflectionFunction($fn);
+    $file=$rf->getFileName();
+    $start=$rf->getStartLine()-1;
+    $end=$rf->getEndLine();
+    $lines=file($file);
+    $code=implode('',array_slice($lines,$start,$end-$start));
+    wp_send_json_success(array('code'=>$code,'fn'=>$fn));
+}
+
 add_action('wp_ajax_ledimov_get_pdf_data','ledimov_ajax_get_pdf_data');
 add_action('wp_ajax_nopriv_ledimov_get_pdf_data','ledimov_ajax_get_pdf_data');
 function ledimov_ajax_get_pdf_data(){global $wpdb;$pid=intval($_POST['property_id']??0);if(!$pid)wp_send_json_error('property_id obrigatório');$ut=$wpdb->prefix.'ledimov_units';$pt=$wpdb->prefix.'ledimov_properties';$prop=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$pt} WHERE id=%d",$pid));if(!$prop)wp_send_json_error('Não encontrado');$broker=ledimov_current_broker();$is_admin=ledimov_is_admin_user();if($broker||$is_admin)$units=$wpdb->get_results($wpdb->prepare("SELECT * FROM {$ut} WHERE property_id=%d ORDER BY floor,unit",$pid));else $units=$wpdb->get_results($wpdb->prepare("SELECT * FROM {$ut} WHERE property_id=%d AND status='available' ORDER BY floor,unit",$pid));$rows=array();foreach($units as $u){$rows[]=array('unit'=>isset($u->unit)?$u->unit:'','floor'=>isset($u->floor)?intval($u->floor):0,'tower'=>isset($u->tower)?$u->tower:'','final'=>isset($u->final)?$u->final:'','bedrooms'=>isset($u->bedrooms)?intval($u->bedrooms):0,'area_util'=>isset($u->area_util)?floatval($u->area_util):0,'area_total'=>isset($u->area_total)?floatval($u->area_total):0,'price'=>isset($u->price)?floatval($u->price):0,'entry_price'=>isset($u->entry_price)?floatval($u->entry_price):0,'monthly_qty'=>isset($u->monthly_qty)?intval($u->monthly_qty):0,'monthly_price'=>isset($u->monthly_price)?floatval($u->monthly_price):0,'orientation'=>isset($u->orientation)?$u->orientation:'','status'=>isset($u->status)?$u->status:'available');}$co=ledimov_get_company();wp_send_json_success(array('property'=>array('id'=>$pid,'title'=>isset($prop->title)?$prop->title:'','address'=>isset($prop->address)?$prop->address:'','neighborhood'=>isset($prop->neighborhood)?$prop->neighborhood:'','city'=>isset($prop->city)?$prop->city:'','state'=>isset($prop->state)?$prop->state:'','legal_reg'=>isset($prop->legal_reg)?$prop->legal_reg:'','whatsapp'=>isset($prop->whatsapp)?$prop->whatsapp:'','cover_url'=>isset($prop->cover_url)?$prop->cover_url:''),'units'=>$rows,'company'=>$co,'is_broker'=>(bool)($broker||$is_admin),'generated'=>date_i18n('d/m/Y H:i')));}
@@ -658,6 +714,7 @@ function ledimov_admin_menu(){
     add_submenu_page('ledimov','Vendas','Vendas','manage_options','ledimov-sales','ledimov_admin_sales');
     add_submenu_page('ledimov','Materiais','Materiais','manage_options','ledimov-materials','ledimov_admin_materials');
     add_submenu_page('ledimov','Criar Páginas','🔧 Criar Páginas','manage_options','ledimov-setup','ledimov_admin_setup');
+    add_submenu_page('ledimov','Templates','🎨 Templates','manage_options','ledimov-templates','ledimov_admin_templates');
     add_submenu_page('ledimov','Editar Páginas','📝 Editar Páginas','manage_options','ledimov-pages','ledimov_admin_pages');
     add_submenu_page('ledimov','Exportar / Importar','📦 Export / Import','manage_options','ledimov-export-import','ledimov_admin_export_import');
     add_submenu_page('ledimov','Configurações','⚙️ Configurações','manage_options','ledimov-settings','ledimov_admin_settings');
@@ -958,7 +1015,7 @@ function ledimov_admin_materials(){global $wpdb;$mt=$wpdb->prefix.'ledimov_mater
    14. SHORTCODES
    ============================================================ */
 add_shortcode('ledimov_tabela','ledimov_sc_tabela');
-function ledimov_sc_tabela($atts){$atts=shortcode_atts(array('id'=>0,'property'=>0,'force'=>0),$atts);$pid=intval($atts['id']?:$atts['property']);if(!$pid)return '<p>Informe o id: [ledimov_tabela id="X"]</p>';$broker=ledimov_current_broker();$is_admin=ledimov_is_admin_user();if(!$broker&&!$is_admin&&!intval($atts['force']))return '';global $wpdb;$ut=$wpdb->prefix.'ledimov_units';$pt=$wpdb->prefix.'ledimov_properties';$prop=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$pt} WHERE id=%d",$pid));if($broker||$is_admin)$units=$wpdb->get_results($wpdb->prepare("SELECT * FROM {$ut} WHERE property_id=%d ORDER BY floor,unit",$pid));else $units=$wpdb->get_results($wpdb->prepare("SELECT * FROM {$ut} WHERE property_id=%d AND status='available' ORDER BY floor,unit",$pid));$floors=array_unique(array_column((array)$units,'floor'));$bedrooms=array_unique(array_column((array)$units,'bedrooms'));sort($floors);sort($bedrooms);ob_start();?>
+function ledimov_sc_tabela($atts){$atts=shortcode_atts(array('id'=>0,'property'=>0,'force'=>0),$atts);$pid=intval($atts['id']?:$atts['property']);if(!$pid)return '<p>Informe o id: [ledimov_tabela id="X"]</p>';$broker=ledimov_current_broker();$is_admin=ledimov_is_admin_user();if(!$broker&&!$is_admin&&!intval($atts['force']))return '';global $wpdb;$ut=$wpdb->prefix.'ledimov_units';$pt=$wpdb->prefix.'ledimov_properties';$prop=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$pt} WHERE id=%d",$pid));if($broker||$is_admin)$units=$wpdb->get_results($wpdb->prepare("SELECT * FROM {$ut} WHERE property_id=%d ORDER BY floor,unit",$pid));else $units=$wpdb->get_results($wpdb->prepare("SELECT * FROM {$ut} WHERE property_id=%d AND status='available' ORDER BY floor,unit",$pid));$floors=array_unique(array_column((array)$units,'floor'));$bedrooms=array_unique(array_column((array)$units,'bedrooms'));sort($floors);sort($bedrooms);$_tpl=ledimov_get_tpl('tabela');if($_tpl)return ledimov_eval_tpl($_tpl,get_defined_vars());ob_start();?>
 <div class="ledimov-wrap" id="ledimov-public-<?php echo $pid;?>">
 <?php if($prop):?><div style="margin-bottom:20px;"><h2 style="font-size:24px;font-weight:800;"><?php echo esc_html(isset($prop->title)?$prop->title:'');?></h2><p style="color:var(--li-muted);margin:4px 0;"><?php echo esc_html(isset($prop->address)?$prop->address:'');?></p></div><?php endif;?>
 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
@@ -997,11 +1054,11 @@ add_shortcode('ledimov_units','ledimov_sc_tabela');
 
 /* [ledimov_mapa id="X"] */
 add_shortcode('ledimov_mapa','ledimov_sc_mapa');
-function ledimov_sc_mapa($atts){$atts=shortcode_atts(array('id'=>0,'property'=>0),$atts);$pid=intval($atts['id']?:$atts['property']);if(!$pid)return '';ob_start();echo '<div class="ledimov-wrap">';ledimov_render_building_map($pid,false);echo '</div>';return ob_get_clean();}
+function ledimov_sc_mapa($atts){$atts=shortcode_atts(array('id'=>0,'property'=>0),$atts);$pid=intval($atts['id']?:$atts['property']);if(!$pid)return '';$_tpl=ledimov_get_tpl('mapa');if($_tpl)return ledimov_eval_tpl($_tpl,get_defined_vars());ob_start();echo '<div class="ledimov-wrap">';ledimov_render_building_map($pid,false);echo '</div>';return ob_get_clean();}
 
 /* [ledimov_area_corretor] */
 add_shortcode('ledimov_area_corretor','ledimov_sc_area_corretor');
-function ledimov_sc_area_corretor($atts){$broker=ledimov_current_broker();ob_start();echo '<div class="ledimov-wrap li-portal">';
+function ledimov_sc_area_corretor($atts){$broker=ledimov_current_broker();$_tpl=ledimov_get_tpl('area_corretor');if($_tpl)return ledimov_eval_tpl($_tpl,get_defined_vars());ob_start();echo '<div class="ledimov-wrap li-portal">';
 if(!$broker){?>
 <div style="max-width:420px;margin:0 auto;padding:40px 0;">
 <div style="text-align:center;margin-bottom:24px;"><div style="font-size:48px;margin-bottom:8px;">🏢</div><h2 style="font-size:24px;font-weight:800;">Área do Corretor</h2><p style="color:var(--li-muted);font-size:14px;">Portal exclusivo para parceiros credenciados</p></div>
@@ -1051,7 +1108,7 @@ return ob_get_clean();}
 
 /* [ledimov_vitrine] */
 add_shortcode('ledimov_vitrine','ledimov_sc_vitrine');
-function ledimov_sc_vitrine($atts){global $wpdb;$pt=$wpdb->prefix.'ledimov_properties';$ut=$wpdb->prefix.'ledimov_units';$props=$wpdb->get_results("SELECT * FROM {$pt} WHERE status='active' ORDER BY title");ob_start();?>
+function ledimov_sc_vitrine($atts){global $wpdb;$pt=$wpdb->prefix.'ledimov_properties';$ut=$wpdb->prefix.'ledimov_units';$props=$wpdb->get_results("SELECT * FROM {$pt} WHERE status='active' ORDER BY title");$_tpl=ledimov_get_tpl('vitrine');if($_tpl)return ledimov_eval_tpl($_tpl,get_defined_vars());ob_start();?>
 <div class="ledimov-wrap"><div class="li-grid">
 <?php foreach($props as $p):$p_id=isset($p->id)?$p->id:0;$p_cover=isset($p->cover_url)?$p->cover_url:'';$p_title=isset($p->title)?$p->title:'';$p_addr=isset($p->address)?$p->address:'';$p_amen=isset($p->amenities)?$p->amenities:'';$min=$wpdb->get_var($wpdb->prepare("SELECT MIN(price) FROM {$ut} WHERE property_id=%d AND status='available'",$p_id));$av=$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$ut} WHERE property_id=%d AND status='available'",$p_id));$p_url=ledimov_property_url($p);?>
 <a href="<?php echo esc_url($p_url);?>" class="li-card" style="text-decoration:none;color:inherit;display:block;">
@@ -1065,6 +1122,7 @@ function ledimov_sc_vitrine($atts){global $wpdb;$pt=$wpdb->prefix.'ledimov_prope
 /* [ledimov_destaque] */
 add_shortcode('ledimov_destaque','ledimov_sc_destaque');
 function ledimov_sc_destaque($atts){$atts=shortcode_atts(array('titulo'=>'','subtitulo'=>'','link'=>''),$atts);global $wpdb;$pt=$wpdb->prefix.'ledimov_properties';$ut=$wpdb->prefix.'ledimov_units';$props=$wpdb->get_results("SELECT * FROM {$pt} WHERE featured=1 AND status='active' ORDER BY featured_at DESC LIMIT 3");if(empty($props))return '<p style="font-family:\'Montserrat\',sans-serif;color:#888;padding:24px 0;">Nenhum empreendimento em destaque.</p>';
+$_tpl=ledimov_get_tpl('destaque');if($_tpl)return ledimov_eval_tpl($_tpl,get_defined_vars());
 ob_start();?>
 <div class="ledimov-wrap" style="background:transparent;padding:0;">
 <?php if($atts['titulo']||$atts['subtitulo']):?><div style="text-align:center;margin-bottom:32px;"><?php if($atts['titulo']):?><h2 style="font-family:'Montserrat',sans-serif;font-size:28px;font-weight:800;margin:0 0 8px;color:var(--li-text);"><?php echo esc_html($atts['titulo']);?></h2><?php endif;?><?php if($atts['subtitulo']):?><p style="font-family:'Montserrat',sans-serif;font-size:15px;color:var(--li-muted);margin:0;"><?php echo esc_html($atts['subtitulo']);?></p><?php endif;?></div><?php endif;?>
@@ -1164,6 +1222,7 @@ function ledimov_sc_card_imovel($atts){
     $plant_urls=[];
     foreach($plants_gallery as $gi) if(!empty($gi->url)) $plant_urls[]=esc_url($gi->url);
 
+    $_tpl=ledimov_get_tpl('card_imovel');if($_tpl)return ledimov_eval_tpl($_tpl,get_defined_vars());
     ob_start();
 ?>
 <style>
@@ -2129,7 +2188,166 @@ window.liLpSubmitCta=function(pid,e){
 }
 
 /* ============================================================
-   15. ADMIN – CRIAR PÁGINAS
+   15. ADMIN – EDITOR DE TEMPLATES
+   ============================================================ */
+function ledimov_admin_templates(){
+    $shortcodes=[
+        'card_imovel'=>['label'=>'Landing Page do Empreendimento','sc'=>'[ledimov_card_imovel id="X"]','desc'=>'Página completa de um empreendimento: galeria, detalhes, plantas, localização e contato.'],
+        'area_corretor'=>['label'=>'Área do Corretor','sc'=>'[ledimov_area_corretor]','desc'=>'Portal de login, cadastro e painel do corretor com tabelas de unidades.'],
+        'vitrine'=>['label'=>'Vitrine de Empreendimentos','sc'=>'[ledimov_vitrine]','desc'=>'Grade com todos os empreendimentos ativos e seus preços mínimos.'],
+        'destaque'=>['label'=>'Empreendimentos em Destaque','sc'=>'[ledimov_destaque]','desc'=>'Seção hero com os empreendimentos marcados como destaque.'],
+        'tabela'=>['label'=>'Tabela de Unidades','sc'=>'[ledimov_tabela id="X"]','desc'=>'Tabela interativa de unidades com filtros por andar, quartos e status.'],
+        'mapa'=>['label'=>'Mapa do Prédio','sc'=>'[ledimov_mapa id="X"]','desc'=>'Planta interativa do prédio com coloração por status de cada unidade.'],
+    ];
+    $active=sanitize_key($_GET['tpl']??array_key_first($shortcodes));
+    if(!isset($shortcodes[$active]))$active=array_key_first($shortcodes);
+    $current_code=get_option('ledimov_tpl_'.$active,'');
+    $has_custom=(bool)$current_code;
+    ?>
+<div class="wrap ledimov-wrap">
+<h1 style="font-size:24px;font-weight:800;margin-bottom:4px;">🎨 Editor de Templates</h1>
+<p style="color:var(--li-muted);margin-bottom:24px;font-size:13px;">Edite o código PHP/HTML de cada shortcode. As alterações propagam imediatamente para todos os usuários. Deixe em branco para usar o template padrão do plugin.</p>
+
+<div style="display:flex;gap:20px;align-items:flex-start;">
+
+<!-- Sidebar: lista de shortcodes -->
+<div style="min-width:220px;max-width:240px;">
+<?php foreach($shortcodes as $key=>$info):
+    $is_active=($key===$active);
+    $is_custom=(bool)get_option('ledimov_tpl_'.$key,'');
+    ?>
+<a href="?page=ledimov-templates&tpl=<?php echo $key;?>"
+   style="display:block;padding:11px 14px;border-radius:10px;text-decoration:none;margin-bottom:6px;border:1px solid <?php echo $is_active?'var(--li-accent)':'var(--li-border)';?>;background:<?php echo $is_active?'var(--li-accent-l)':'var(--li-card)';?>;color:<?php echo $is_active?'var(--li-accent)':'var(--li-text)';?>;font-size:13px;font-weight:<?php echo $is_active?700:500;?>;">
+  <div><?php echo esc_html($info['label']);?></div>
+  <div style="font-family:monospace;font-size:10px;color:var(--li-muted);margin-top:2px;"><?php echo esc_html($info['sc']);?></div>
+  <?php if($is_custom):?><div style="font-size:10px;color:#1a7a4a;margin-top:4px;font-weight:600;">● Personalizado</div><?php else:?><div style="font-size:10px;color:var(--li-muted);margin-top:4px;">○ Padrão do plugin</div><?php endif;?>
+</a>
+<?php endforeach;?>
+</div>
+
+<!-- Editor principal -->
+<div style="flex:1;min-width:0;">
+<div style="background:var(--li-card);border:1px solid var(--li-border);border-radius:14px;padding:22px;">
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+<div>
+  <div style="font-size:17px;font-weight:700;"><?php echo esc_html($shortcodes[$active]['label']);?></div>
+  <div style="font-size:12px;color:var(--li-muted);margin-top:3px;"><?php echo esc_html($shortcodes[$active]['desc']);?></div>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;">
+  <button id="li-tpl-load-default" class="li-btn li-btn-outline" style="font-size:12px;">📥 Carregar código padrão</button>
+  <button id="li-tpl-reset" class="li-btn" style="font-size:12px;background:#fff3cd;border:1px solid #ffc107;color:#856404;" <?php echo !$has_custom?'disabled':'';?>>🔄 Restaurar padrão</button>
+  <button id="li-tpl-save" class="li-btn li-btn-primary" style="font-size:12px;">💾 Salvar template</button>
+</div>
+</div>
+
+<div id="li-tpl-status" style="margin-bottom:10px;font-size:12px;">
+<?php if($has_custom):?>
+<span style="background:#d4efdf;color:#1a7a4a;border-radius:6px;padding:4px 10px;font-weight:600;">✅ Template personalizado ativo</span>
+<?php else:?>
+<span style="background:var(--li-card-2);color:var(--li-muted);border-radius:6px;padding:4px 10px;">Usando template padrão do plugin</span>
+<?php endif;?>
+</div>
+
+<div id="li-tpl-loading" style="display:none;padding:12px;font-size:13px;color:var(--li-muted);">⏳ Carregando código padrão…</div>
+<div id="li-tpl-msg" style="display:none;margin-bottom:10px;border-radius:8px;padding:10px 14px;font-size:13px;"></div>
+
+<div style="border:1px solid var(--li-border);border-radius:8px;overflow:hidden;">
+<textarea id="li-tpl-editor" style="width:100%;min-height:480px;font-family:monospace;font-size:13px;line-height:1.6;padding:14px;box-sizing:border-box;border:none;background:#1e1e2e;color:#cdd6f4;resize:vertical;"><?php echo esc_textarea($current_code);?></textarea>
+</div>
+
+<div style="margin-top:10px;font-size:11px;color:var(--li-muted);">
+💡 <strong>Variáveis disponíveis:</strong> todas as variáveis locais da função original estão disponíveis no template (ex: <code>$pid</code>, <code>$broker</code>, <code>$prop</code>, <code>$units</code>, <code>$wpdb</code> etc.). Use PHP normal com tags <code>&lt;?php ?&gt;</code>.
+</div>
+</div>
+</div><!-- /editor -->
+</div><!-- /flex -->
+</div><!-- /wrap -->
+
+<script>
+(function($){
+  var tplKey='<?php echo esc_js($active);?>';
+  var nonce=window.ledimovNonce||'';
+  var editor=null;
+
+  // Init CodeMirror if available
+  $(function(){
+    var ta=document.getElementById('li-tpl-editor');
+    if(window.wp&&wp.codeEditor){
+      var cmSettings=wp.codeEditor.defaultSettings?$.extend(true,{},wp.codeEditor.defaultSettings):{};
+      if(cmSettings.codemirror){
+        cmSettings.codemirror=$.extend({},cmSettings.codemirror,{
+          indentUnit:2,tabSize:2,lineNumbers:true,lineWrapping:true,
+          mode:'application/x-httpd-php',theme:'default'
+        });
+      }
+      var inst=wp.codeEditor.initialize(ta,cmSettings);
+      editor=inst.codemirror||null;
+    }
+  });
+
+  function getCode(){
+    if(editor)return editor.getValue();
+    return document.getElementById('li-tpl-editor').value;
+  }
+  function setCode(code){
+    if(editor){editor.setValue(code);editor.refresh();}
+    else document.getElementById('li-tpl-editor').value=code;
+  }
+  function showMsg(msg,ok){
+    var el=$('#li-tpl-msg');
+    el.css({display:'block',background:ok?'#d4efdf':'#fdecea',color:ok?'#1a7a4a':'#7b241c',border:'1px solid '+(ok?'#6ee7b7':'#f5b7b1')});
+    el.text(msg);
+    setTimeout(function(){el.fadeOut(400,function(){el.hide();});},3500);
+  }
+  function updateStatus(hasCustom){
+    var s=$('#li-tpl-status');
+    if(hasCustom){
+      s.html('<span style="background:#d4efdf;color:#1a7a4a;border-radius:6px;padding:4px 10px;font-weight:600;">✅ Template personalizado ativo</span>');
+      $('#li-tpl-reset').prop('disabled',false);
+    }else{
+      s.html('<span style="background:var(--li-card-2);color:var(--li-muted);border-radius:6px;padding:4px 10px;">Usando template padrão do plugin</span>');
+      $('#li-tpl-reset').prop('disabled',true);
+    }
+  }
+
+  $('#li-tpl-load-default').on('click',function(){
+    $('#li-tpl-loading').show();
+    $.post(ajaxurl,{action:'ledimov_get_default_tpl',nonce:nonce,key:tplKey},function(res){
+      $('#li-tpl-loading').hide();
+      if(res.success){
+        // Strip function wrapper, keep only the body content
+        var code=res.data.code;
+        setCode(code);
+        showMsg('Código padrão carregado. Edite e salve para personalizar.', true);
+      }else{
+        showMsg('Erro: '+(res.data||'Falha ao carregar código')+'',false);
+      }
+    },'json').fail(function(){$('#li-tpl-loading').hide();showMsg('Erro de comunicação.',false);});
+  });
+
+  $('#li-tpl-save').on('click',function(){
+    var code=getCode();
+    $.post(ajaxurl,{action:'ledimov_save_tpl',nonce:nonce,key:tplKey,code:code},function(res){
+      if(res.success){showMsg('✅ Template salvo com sucesso!',true);updateStatus(code.trim()!=='');}
+      else showMsg('❌ '+(res.data||'Erro ao salvar'),false);
+    },'json').fail(function(){showMsg('Erro de comunicação.',false);});
+  });
+
+  $('#li-tpl-reset').on('click',function(){
+    if(!confirm('Restaurar o template padrão do plugin? O código personalizado será removido.'))return;
+    $.post(ajaxurl,{action:'ledimov_reset_tpl',nonce:nonce,key:tplKey},function(res){
+      if(res.success){setCode('');showMsg('✅ Template restaurado ao padrão!',true);updateStatus(false);}
+      else showMsg('❌ '+(res.data||'Erro'),false);
+    },'json').fail(function(){showMsg('Erro de comunicação.',false);});
+  });
+
+})(jQuery);
+</script>
+<?php }
+
+/* ============================================================
+   16. ADMIN – CRIAR PÁGINAS
    ============================================================ */
 function ledimov_admin_setup(){global $wpdb;$pt=$wpdb->prefix.'ledimov_properties';$props=$wpdb->get_results("SELECT id,title FROM {$pt} ORDER BY title");?>
 <div class="wrap ledimov-wrap"><h1 style="font-size:24px;font-weight:800;margin-bottom:6px;">🔧 Criar Páginas WordPress</h1>
