@@ -547,7 +547,7 @@ window.liGenerateProposal=function(unitId){liAjax('ledimov_get_unit_detail',{uni
 window.liSaveProposal=function(unitId){liAjax('ledimov_save_proposal',{unit_id:unitId,client_name:(document.getElementById('li-prop-name')||{value:''}).value,notes:(document.getElementById('li-prop-notes')||{value:''}).value},function(err,res){if(err||!res.success)return liToast('Erro','error');liToast('Proposta salva!','success');liModal.close();});};
 window.liDownloadTablePDF=function(propId,propTitle){liToast('Preparando PDF...','info');liAjax('ledimov_get_pdf_data',{property_id:propId},function(err,res){if(err||!res.success)return liToast('Erro ao buscar dados','error');var d=res.data;var loadScript=function(src,cb){if(document.querySelector('script[src="'+src+'"]'))return cb();var s=document.createElement('script');s.src=src;s.onload=cb;document.head.appendChild(s);};loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',function(){loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js',function(){liGeneratePDF(d);});});});};
 window.liGeneratePDF=function(d){var jsPDF=(window.jspdf&&window.jspdf.jsPDF)||window.jsPDF;if(!jsPDF)return liToast('Biblioteca PDF não carregou.','error');var co=d.company||{},prop=d.property||{},units=d.units||[];var hexToRgb=function(hex){hex=hex.replace('#','');return[parseInt(hex.substring(0,2),16),parseInt(hex.substring(2,4),16),parseInt(hex.substring(4,6),16)];};var cp=hexToRgb(co.color_primary||'#c0392b'),cs=hexToRgb(co.color_secondary||'#0e9f6e');var doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});var W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),margin=14;doc.setFillColor(cp[0],cp[1],cp[2]);doc.rect(0,0,W,22,'F');doc.setTextColor(255,255,255);doc.setFontSize(14);doc.setFont('helvetica','bold');doc.text(co.name||'Tabela',margin,10);doc.setFontSize(7);doc.text('Gerado em: '+d.generated,W-margin,10,{align:'right'});var y=30;doc.setTextColor(cp[0],cp[1],cp[2]);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text(prop.title||'',margin,y);y+=4;doc.setDrawColor(cp[0],cp[1],cp[2]);doc.setLineWidth(0.5);doc.line(margin,y,W-margin,y);y+=6;var statusLabel={available:'Disponível',reserved:'Reservado',sold:'Vendido',blocked:'Bloqueado'};var statusColor={available:[cs[0],cs[1],cs[2]],reserved:[234,179,8],sold:[239,68,68],blocked:[148,163,184]};doc.autoTable({head:[['Apto','Andar','Torre','Dorm.','Área Útil','Valor Total','Entrada','Parcelas','Status']],body:units.map(function(u){return[u.unit,u.floor+'º',u.tower||'-',u.bedrooms||'-',u.area_util?u.area_util.toFixed(0)+' m²':'-',u.price?'R$ '+u.price.toLocaleString('pt-BR',{minimumFractionDigits:0}):'-',u.entry_price?'R$ '+u.entry_price.toLocaleString('pt-BR',{minimumFractionDigits:0}):'-',u.monthly_qty&&u.monthly_price?u.monthly_qty+'x R$ '+u.monthly_price.toLocaleString('pt-BR',{minimumFractionDigits:0}):'-',statusLabel[u.status]||u.status];}),startY:y,margin:{left:margin,right:margin},styles:{fontSize:8,cellPadding:2.5,valign:'middle'},headStyles:{fillColor:cp,textColor:[255,255,255],fontStyle:'bold'},alternateRowStyles:{fillColor:[248,250,252]},didParseCell:function(data){if(data.section==='body'&&data.column.index===8){var s=units[data.row.index]?units[data.row.index].status:'';var c=statusColor[s]||[100,100,100];data.cell.styles.textColor=c;}},didDrawPage:function(){doc.setFontSize(7);doc.setTextColor(150,150,150);doc.text(co.name||'',margin,H-6);doc.text('Página '+doc.internal.getCurrentPageInfo().pageNumber+' de '+doc.internal.getNumberOfPages(),W-margin,H-6,{align:'right'});}});var filename=(prop.title||'tabela').replace(/[^a-z0-9]/gi,'_').toLowerCase();doc.save('tabela_'+filename+'_'+new Date().toISOString().slice(0,10)+'.pdf');liToast('PDF gerado!','success');};
-window.liBrokerLogin=function(){var emailEl=document.getElementById('li-broker-email'),passEl=document.getElementById('li-broker-pass'),errEl=document.getElementById('li-login-error'),btn=document.getElementById('li-login-btn');if(!emailEl||!passEl)return;var email=emailEl.value.trim(),pass=passEl.value;function showErr(msg){if(errEl){errEl.textContent=msg;errEl.style.display='block';}else liToast(msg,'error');}if(!email||!pass)return showErr('Preencha e-mail e senha');if(errEl)errEl.style.display='none';if(btn){btn.disabled=true;btn.textContent='⏳ Entrando...';}liAjax('ledimov_broker_login',{email:email,password:pass},function(err,res){if(btn){btn.disabled=false;btn.textContent='Entrar →';}if(err||!res.success)return showErr((res&&res.data)?res.data:'Erro de conexão.');liToast('Bem-vindo(a), '+res.data.name+'!','success');setTimeout(function(){location.reload();},800);});};
+window.liBrokerLogin=function(){var emailEl=document.getElementById('li-broker-email'),passEl=document.getElementById('li-broker-pass'),errEl=document.getElementById('li-login-error'),btn=document.getElementById('li-login-btn');if(!emailEl||!passEl)return;var email=emailEl.value.trim(),pass=passEl.value;function showErr(msg){if(errEl){errEl.textContent=msg;errEl.style.display='block';}else liToast(msg,'error');}if(!email||!pass)return showErr('Preencha e-mail e senha');if(errEl)errEl.style.display='none';if(btn){btn.disabled=true;btn.textContent='⏳ Entrando...';}liAjax('ledimov_broker_login',{email:email,password:pass},function(err,res){if(btn){btn.disabled=false;btn.textContent='Entrar →';}if(err||!res.success)return showErr((res&&res.data)?res.data:'Erro de conexão.');liToast('Bem-vindo(a), '+res.data.name+'!','success');setTimeout(function(){if(res.data.redirect&&res.data.redirect!==window.location.href){location.href=res.data.redirect;}else{location.reload();}},800);});};
 var _liMediaFrames={};
 function _liOpenMedia(opts){var useFallback=(typeof window.wp==='undefined')||(typeof window.wp.media==='undefined');if(useFallback){var input=opts.multiple?prompt('Cole URLs separadas por vírgula:'):prompt('Cole a URL:');if(!input)return;var urls=opts.multiple?input.split(',').map(function(u){return u.trim();}).filter(Boolean):[input.trim()];urls.forEach(function(u){opts.onSelect({url:u,thumb_url:u,attachment_id:0,caption:''}); });return;}var cacheKey=opts.cacheKey||'default';if(!_liMediaFrames[cacheKey])_liMediaFrames[cacheKey]=window.wp.media({title:opts.title||'Selecionar Imagem',button:{text:opts.btnText||'Usar imagem'},multiple:opts.multiple||false});var frame=_liMediaFrames[cacheKey];frame.off('select');frame.on('select',function(){var sel=frame.state().get('selection');sel.each(function(att){var a=att.toJSON();var thumb=(a.sizes&&a.sizes.thumbnail)?a.sizes.thumbnail.url:a.url;opts.onSelect({url:a.url,thumb_url:thumb,attachment_id:a.id,caption:a.caption||a.title||''});});});frame.open();}
 window.liPickImage=function(inputId,previewId,fit){fit=fit||'cover';_liOpenMedia({cacheKey:'pick_'+inputId,title:'Selecionar Imagem',btnText:'Usar esta imagem',multiple:false,onSelect:function(img){var inp=document.getElementById(inputId),prev=document.getElementById(previewId);if(inp)inp.value=img.url;if(prev)prev.innerHTML='<img src="'+img.url+'" style="width:100%;height:100%;object-fit:'+fit+';">';}});};
@@ -590,11 +590,11 @@ function ledimov_ajax_save_proposal(){check_ajax_referer('ledimov_nonce','nonce'
 
 add_action('wp_ajax_ledimov_broker_register','ledimov_ajax_broker_register');
 add_action('wp_ajax_nopriv_ledimov_broker_register','ledimov_ajax_broker_register');
-function ledimov_ajax_broker_register(){check_ajax_referer('ledimov_nonce','nonce');global $wpdb;$t=$wpdb->prefix.'ledimov_brokers';$name=sanitize_text_field($_POST['name']??'');$email=sanitize_email($_POST['email']??'');$phone=sanitize_text_field($_POST['phone']??'');$creci=sanitize_text_field($_POST['creci']??'');$agency=sanitize_text_field($_POST['agency']??'');$pass=$_POST['password']??'';if(empty($name))wp_send_json_error('Nome é obrigatório');if(empty($email))wp_send_json_error('E-mail é obrigatório');if(strlen($pass)<6)wp_send_json_error('Senha deve ter pelo menos 6 caracteres');$exists=$wpdb->get_var($wpdb->prepare("SELECT id FROM {$t} WHERE email=%s",$email));if($exists)wp_send_json_error('E-mail já cadastrado.');ledimov_migrate_tables();ledimov_create_tables();$hash=password_hash($pass,PASSWORD_DEFAULT);$auto_approve=get_option('ledimov_auto_approve_brokers','1');$status=($auto_approve==='1')?'active':'pending';$result=$wpdb->insert($t,array('name'=>$name,'email'=>$email,'phone'=>$phone,'creci'=>$creci,'agency'=>$agency,'password_hash'=>$hash,'status'=>$status,'created_at'=>current_time('mysql')));if($result===false)wp_send_json_error('Erro ao salvar: '.$wpdb->last_error);$broker_id=$wpdb->insert_id;if($status==='active'){$token=bin2hex(random_bytes(32));$expires=date('Y-m-d H:i:s',strtotime('+8 hours'));$wpdb->update($t,array('token'=>$token,'token_expires'=>$expires),array('id'=>$broker_id));setcookie('ledimov_broker_id',$broker_id,strtotime('+8 hours'),COOKIEPATH,COOKIE_DOMAIN,is_ssl(),true);setcookie('ledimov_broker_token',$token,strtotime('+8 hours'),COOKIEPATH,COOKIE_DOMAIN,is_ssl(),true);wp_send_json_success(array('name'=>$name,'auto_login'=>true,'msg'=>'Conta criada! Bem-vindo(a), '.$name.'!'));}else{wp_send_json_success(array('name'=>$name,'auto_login'=>false,'msg'=>'Cadastro enviado! Aguarde a aprovação.'));}}
+function ledimov_ajax_broker_register(){check_ajax_referer('ledimov_nonce','nonce');global $wpdb;$t=$wpdb->prefix.'ledimov_brokers';$name=sanitize_text_field($_POST['name']??'');$email=sanitize_email($_POST['email']??'');$phone=sanitize_text_field($_POST['phone']??'');$creci=sanitize_text_field($_POST['creci']??'');$agency=sanitize_text_field($_POST['agency']??'');$pass=$_POST['password']??'';if(empty($name))wp_send_json_error('Nome é obrigatório');if(empty($email))wp_send_json_error('E-mail é obrigatório');if(strlen($pass)<6)wp_send_json_error('Senha deve ter pelo menos 6 caracteres');$exists=$wpdb->get_var($wpdb->prepare("SELECT id FROM {$t} WHERE email=%s",$email));if($exists)wp_send_json_error('E-mail já cadastrado.');ledimov_migrate_tables();ledimov_create_tables();$hash=password_hash($pass,PASSWORD_DEFAULT);$auto_approve=get_option('ledimov_auto_approve_brokers','1');$status=($auto_approve==='1')?'active':'pending';$result=$wpdb->insert($t,array('name'=>$name,'email'=>$email,'phone'=>$phone,'creci'=>$creci,'agency'=>$agency,'password_hash'=>$hash,'status'=>$status,'created_at'=>current_time('mysql')));if($result===false)wp_send_json_error('Erro ao salvar: '.$wpdb->last_error);$broker_id=$wpdb->insert_id;if($status==='active'){$token=bin2hex(random_bytes(32));$expires=date('Y-m-d H:i:s',strtotime('+8 hours'));$wpdb->update($t,array('token'=>$token,'token_expires'=>$expires),array('id'=>$broker_id));setcookie('ledimov_broker_id',$broker_id,strtotime('+8 hours'),COOKIEPATH,COOKIE_DOMAIN,is_ssl(),true);setcookie('ledimov_broker_token',$token,strtotime('+8 hours'),COOKIEPATH,COOKIE_DOMAIN,is_ssl(),true);$broker_area=get_page_by_path('area-corretor');$redirect_url=$broker_area?get_permalink($broker_area->ID):'';wp_send_json_success(array('name'=>$name,'auto_login'=>true,'redirect'=>$redirect_url,'msg'=>'Conta criada! Bem-vindo(a), '.$name.'!'));}else{wp_send_json_success(array('name'=>$name,'auto_login'=>false,'msg'=>'Cadastro enviado! Aguarde a aprovação.'));}}
 
 add_action('wp_ajax_ledimov_broker_login','ledimov_ajax_broker_login');
 add_action('wp_ajax_nopriv_ledimov_broker_login','ledimov_ajax_broker_login');
-function ledimov_ajax_broker_login(){check_ajax_referer('ledimov_nonce','nonce');global $wpdb;$t=$wpdb->prefix.'ledimov_brokers';$email=sanitize_email($_POST['email']??'');$pass=$_POST['password']??'';if(empty($email)||empty($pass))wp_send_json_error('Preencha e-mail e senha');$broker=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$t} WHERE email=%s",$email));if(!$broker)wp_send_json_error('E-mail não cadastrado.');$hash=isset($broker->password_hash)?$broker->password_hash:'';$ok=false;if($hash){if(password_verify($pass,$hash))$ok=true;if(!$ok&&md5($pass)===$hash)$ok=true;if(!$ok&&$pass===$hash)$ok=true;}if(!$ok)wp_send_json_error('Senha incorreta.');$status=isset($broker->status)?$broker->status:'pending';if($status==='inactive')wp_send_json_error('Conta desativada.');if($status==='pending')wp_send_json_error('Aguardando aprovação.');$token=bin2hex(random_bytes(32));$expires=date('Y-m-d H:i:s',strtotime('+8 hours'));$wpdb->update($t,array('token'=>$token,'token_expires'=>$expires),array('id'=>$broker->id));setcookie('ledimov_broker_id',$broker->id,strtotime('+8 hours'),COOKIEPATH,COOKIE_DOMAIN,is_ssl(),true);setcookie('ledimov_broker_token',$token,strtotime('+8 hours'),COOKIEPATH,COOKIE_DOMAIN,is_ssl(),true);wp_send_json_success(array('name'=>$broker->name));}
+function ledimov_ajax_broker_login(){check_ajax_referer('ledimov_nonce','nonce');global $wpdb;$t=$wpdb->prefix.'ledimov_brokers';$email=sanitize_email($_POST['email']??'');$pass=$_POST['password']??'';if(empty($email)||empty($pass))wp_send_json_error('Preencha e-mail e senha');$broker=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$t} WHERE email=%s",$email));if(!$broker)wp_send_json_error('E-mail não cadastrado.');$hash=isset($broker->password_hash)?$broker->password_hash:'';$ok=false;if($hash){if(password_verify($pass,$hash))$ok=true;if(!$ok&&md5($pass)===$hash)$ok=true;if(!$ok&&$pass===$hash)$ok=true;}if(!$ok)wp_send_json_error('Senha incorreta.');$status=isset($broker->status)?$broker->status:'pending';if($status==='inactive')wp_send_json_error('Conta desativada.');if($status==='pending')wp_send_json_error('Aguardando aprovação.');$token=bin2hex(random_bytes(32));$expires=date('Y-m-d H:i:s',strtotime('+8 hours'));$wpdb->update($t,array('token'=>$token,'token_expires'=>$expires),array('id'=>$broker->id));setcookie('ledimov_broker_id',$broker->id,strtotime('+8 hours'),COOKIEPATH,COOKIE_DOMAIN,is_ssl(),true);setcookie('ledimov_broker_token',$token,strtotime('+8 hours'),COOKIEPATH,COOKIE_DOMAIN,is_ssl(),true);$broker_area=get_page_by_path('area-corretor');$redirect_url=$broker_area?get_permalink($broker_area->ID):'';wp_send_json_success(array('name'=>$broker->name,'redirect'=>$redirect_url));}
 
 add_action('wp_ajax_ledimov_broker_logout','ledimov_ajax_broker_logout');
 add_action('wp_ajax_nopriv_ledimov_broker_logout','ledimov_ajax_broker_logout');
@@ -658,6 +658,7 @@ function ledimov_admin_menu(){
     add_submenu_page('ledimov','Vendas','Vendas','manage_options','ledimov-sales','ledimov_admin_sales');
     add_submenu_page('ledimov','Materiais','Materiais','manage_options','ledimov-materials','ledimov_admin_materials');
     add_submenu_page('ledimov','Criar Páginas','🔧 Criar Páginas','manage_options','ledimov-setup','ledimov_admin_setup');
+    add_submenu_page('ledimov','Editar Páginas','📝 Editar Páginas','manage_options','ledimov-pages','ledimov_admin_pages');
     add_submenu_page('ledimov','Exportar / Importar','📦 Export / Import','manage_options','ledimov-export-import','ledimov_admin_export_import');
     add_submenu_page('ledimov','Configurações','⚙️ Configurações','manage_options','ledimov-settings','ledimov_admin_settings');
 }
@@ -1028,7 +1029,7 @@ if(!$broker){?>
 </div>
 <script>
 function liShowTab(tab){var isLogin=(tab==='login');document.getElementById('li-panel-login').style.display=isLogin?'block':'none';document.getElementById('li-panel-register').style.display=isLogin?'none':'block';document.getElementById('li-tab-login').style.borderBottomColor=isLogin?'var(--li-blue)':'transparent';document.getElementById('li-tab-login').style.color=isLogin?'var(--li-text)':'var(--li-muted)';document.getElementById('li-tab-register').style.borderBottomColor=isLogin?'transparent':'var(--li-blue)';document.getElementById('li-tab-register').style.color=isLogin?'var(--li-muted)':'var(--li-text)';}
-window.liBrokerRegister=function(){var name=(document.getElementById('li-reg-name')||{}).value||'',email=(document.getElementById('li-reg-email')||{}).value||'',phone=(document.getElementById('li-reg-phone')||{}).value||'',creci=(document.getElementById('li-reg-creci')||{}).value||'',agency=(document.getElementById('li-reg-agency')||{}).value||'',pass=(document.getElementById('li-reg-pass')||{}).value||'',pass2=(document.getElementById('li-reg-pass2')||{}).value||'';var errEl=document.getElementById('li-reg-error'),btn=document.getElementById('li-reg-btn');function showErr(msg){errEl.textContent=msg;errEl.style.display='block';}errEl.style.display='none';if(!name.trim())return showErr('Nome é obrigatório');if(!email.trim())return showErr('E-mail é obrigatório');if(pass.length<6)return showErr('Senha deve ter pelo menos 6 caracteres');if(pass!==pass2)return showErr('As senhas não coincidem');btn.disabled=true;btn.textContent='⏳ Criando conta...';liAjax('ledimov_broker_register',{name:name,email:email,phone:phone,creci:creci,agency:agency,password:pass},function(err,res){btn.disabled=false;btn.textContent='Criar Conta →';if(err||!res.success){return showErr(res?(res.data||'Erro'):'Erro de conexão');}if(res.data.auto_login){liToast(res.data.msg||'Bem-vindo(a)!','success');setTimeout(function(){location.reload();},1000);}else{errEl.style.background='#14532d';errEl.style.color='#86efac';errEl.textContent=res.data.msg||'Cadastro enviado!';errEl.style.display='block';btn.textContent='Cadastro Enviado ✅';}});};
+window.liBrokerRegister=function(){var name=(document.getElementById('li-reg-name')||{}).value||'',email=(document.getElementById('li-reg-email')||{}).value||'',phone=(document.getElementById('li-reg-phone')||{}).value||'',creci=(document.getElementById('li-reg-creci')||{}).value||'',agency=(document.getElementById('li-reg-agency')||{}).value||'',pass=(document.getElementById('li-reg-pass')||{}).value||'',pass2=(document.getElementById('li-reg-pass2')||{}).value||'';var errEl=document.getElementById('li-reg-error'),btn=document.getElementById('li-reg-btn');function showErr(msg){errEl.textContent=msg;errEl.style.display='block';}errEl.style.display='none';if(!name.trim())return showErr('Nome é obrigatório');if(!email.trim())return showErr('E-mail é obrigatório');if(pass.length<6)return showErr('Senha deve ter pelo menos 6 caracteres');if(pass!==pass2)return showErr('As senhas não coincidem');btn.disabled=true;btn.textContent='⏳ Criando conta...';liAjax('ledimov_broker_register',{name:name,email:email,phone:phone,creci:creci,agency:agency,password:pass},function(err,res){btn.disabled=false;btn.textContent='Criar Conta →';if(err||!res.success){return showErr(res?(res.data||'Erro'):'Erro de conexão');}if(res.data.auto_login){liToast(res.data.msg||'Bem-vindo(a)!','success');setTimeout(function(){if(res.data.redirect&&res.data.redirect!==window.location.href){location.href=res.data.redirect;}else{location.reload();}},1000);}else{errEl.style.background='#14532d';errEl.style.color='#86efac';errEl.textContent=res.data.msg||'Cadastro enviado!';errEl.style.display='block';btn.textContent='Cadastro Enviado ✅';}});};
 </script>
 <?php }else{
 global $wpdb;$ut=$wpdb->prefix.'ledimov_units';$pt=$wpdb->prefix.'ledimov_properties';$rt=$wpdb->prefix.'ledimov_reservations';$mt=$wpdb->prefix.'ledimov_materials';$props=$wpdb->get_results("SELECT * FROM {$pt} WHERE status='active'");$my_reserv=$wpdb->get_results($wpdb->prepare("SELECT r.*,u.unit,u.floor,p.title as ptitle FROM {$rt} r LEFT JOIN {$ut} u ON u.id=r.unit_id LEFT JOIN {$pt} p ON p.id=u.property_id WHERE r.broker_id=%d AND r.status='active' ORDER BY r.expires_at ASC LIMIT 20",$broker->id));$avail_count=$wpdb->get_var("SELECT COUNT(*) FROM {$ut} WHERE status='available'");$reserv_count=$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$rt} WHERE broker_id=%d AND status='active'",$broker->id));?>
@@ -1039,7 +1040,7 @@ global $wpdb;$ut=$wpdb->prefix.'ledimov_units';$pt=$wpdb->prefix.'ledimov_proper
 <?php foreach($props as $p):$p_id=isset($p->id)?$p->id:0;$p_title=isset($p->title)?$p->title:'';$p_addr=isset($p->address)?$p->address:'';?>
 <div style="background:var(--li-card);border-radius:12px;border:1px solid var(--li-border);padding:20px;margin-bottom:20px;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;"><div><div style="font-size:16px;font-weight:700;"><?php echo esc_html($p_title);?></div><div style="font-size:12px;color:var(--li-muted)"><?php echo esc_html($p_addr);?></div></div><div style="display:flex;gap:8px;"><button class="li-btn li-btn-outline" style="font-size:12px;" onclick="liToggleMap('map-<?php echo intval($p_id);?>')">🏗 Mapa</button><button class="li-btn li-btn-outline" style="font-size:12px;" onclick="liToggleMap('table-<?php echo intval($p_id);?>')">📋 Tabela</button></div></div>
 <div id="map-<?php echo intval($p_id);?>" style="display:none;margin-top:16px;"><?php ledimov_render_building_map($p_id,false);?></div>
-<div id="table-<?php echo intval($p_id);?>" style="display:none;margin-top:16px;"><?php echo ledimov_sc_tabela(array('id'=>$p_id));?></div>
+<div id="table-<?php echo intval($p_id);?>" style="display:block;margin-top:16px;"><?php echo ledimov_sc_tabela(array('id'=>$p_id));?></div>
 <?php $mats=$wpdb->get_results($wpdb->prepare("SELECT * FROM {$mt} WHERE property_id=%d AND access IN ('broker','public')",$p_id));if($mats):?><div style="margin-top:12px;"><div style="font-size:12px;font-weight:600;color:var(--li-muted);margin-bottom:8px;">📁 Materiais</div><div style="display:flex;gap:8px;flex-wrap:wrap;"><?php foreach($mats as $m):?><a href="<?php echo esc_url(isset($m->file_url)?$m->file_url:'');?>" target="_blank" class="li-btn li-btn-outline" style="font-size:11px;padding:5px 10px;text-decoration:none;">⬇️ <?php echo esc_html(isset($m->title)?$m->title:'');?></a><?php endforeach;?></div></div><?php endif;?>
 </div>
 <?php endforeach;?>
@@ -2016,18 +2017,7 @@ function ledimov_sc_card_imovel($atts){
 </div>
 <?php endif;?>
 
-<?php /* ═══════════ TABELA DE UNIDADES — SÓ PARA CORRETORES/ADMIN ═══════════ */ ?>
-<?php if($is_logged):?>
-<div class="li-lp-section">
-<div class="li-lp-section-inner">
-  <div class="li-lp-eyebrow">Painel do Corretor</div>
-  <h2 class="li-lp-h2">Estoque completo</h2>
-  <?php echo ledimov_sc_tabela(array('id'=>$pid));?>
-</div>
-</div>
-
-<?php else:?>
-<?php /* ═══════════ CAIXA DE CONTATO — PARA VISITANTES ═══════════ */ ?>
+<?php /* ═══════════ CAIXA DE CONTATO ═══════════ */ ?>
 <?php if($c_whats):?>
 <div class="li-lp-section">
 <div class="li-lp-section-inner">
@@ -2052,7 +2042,6 @@ function ledimov_sc_card_imovel($atts){
   </div>
 </div>
 </div>
-<?php endif;?>
 <?php endif;?>
 
 <?php /* ═══════════ LOCALIZAÇÃO ═══════════ */ ?>
@@ -2179,7 +2168,125 @@ function liCreatePage(slug,title,sc){liAjax('ledimov_create_page',{slug:slug,tit
 <?php }
 
 /* ============================================================
-   16. ADMIN – CONFIGURAÇÕES
+   16. ADMIN – EDITAR PÁGINAS
+   ============================================================ */
+function ledimov_admin_pages(){
+    global $wpdb;
+    $pt=$wpdb->prefix.'ledimov_properties';
+
+    /* ── Salvar ── */
+    if(isset($_POST['ledimov_save_page_id'])&&current_user_can('manage_options')&&check_admin_referer('ledimov_pages_save')){
+        $page_id=intval($_POST['ledimov_save_page_id']);
+        $content=wp_unslash($_POST['page_content']??'');
+        $title=sanitize_text_field(wp_unslash($_POST['page_title']??''));
+        $update=['ID'=>$page_id,'post_content'=>$content];
+        if($title)$update['post_title']=$title;
+        $result=wp_update_post($update);
+        if($result&&!is_wp_error($result)){
+            echo '<div class="notice notice-success is-dismissible"><p>✅ Página atualizada com sucesso!</p></div>';
+        }else{
+            echo '<div class="notice notice-error"><p>❌ Erro ao salvar a página.</p></div>';
+        }
+    }
+
+    /* ── Coletar todas as páginas LedImov ── */
+    $page_ids=[];
+    foreach(['vitrine-imoveis','area-corretor'] as $slug){
+        $p=get_page_by_path($slug);
+        if($p)$page_ids[$p->ID]=$p->ID;
+    }
+    $props=$wpdb->get_results("SELECT id,title FROM {$pt}");
+    foreach($props as $prop){
+        $slug=sanitize_title($prop->title);
+        $p=get_page_by_path($slug);
+        if($p)$page_ids[$p->ID]=$p->ID;
+    }
+    $pages=$page_ids?get_posts(['include'=>array_values($page_ids),'post_type'=>'page','numberposts'=>-1,'post_status'=>'any','orderby'=>'title','order'=>'ASC']):[];
+
+    $edit_id=intval($_GET['edit_page']??0);
+    $editing=$edit_id?get_post($edit_id):null;
+    ?>
+<div class="wrap ledimov-wrap">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+<h1 style="font-size:24px;font-weight:800;">📝 Editar Páginas do LedImov</h1>
+<?php if($editing):?><a href="?page=ledimov-pages" class="li-btn li-btn-outline" style="text-decoration:none;">← Voltar à lista</a><?php endif;?>
+</div>
+
+<?php if($editing):?>
+<!-- ── Formulário de edição ── -->
+<div style="max-width:860px;">
+<div style="background:var(--li-card);border:1px solid var(--li-border);border-radius:14px;padding:28px;">
+<h2 style="margin:0 0 20px;font-size:17px;font-weight:700;">Editando: <span style="color:var(--li-accent);"><?php echo esc_html($editing->post_title);?></span></h2>
+<form method="post">
+<?php wp_nonce_field('ledimov_pages_save');?>
+<input type="hidden" name="ledimov_save_page_id" value="<?php echo $editing->ID;?>">
+<div class="li-form-group">
+    <label>Título da Página</label>
+    <input class="li-input" name="page_title" value="<?php echo esc_attr($editing->post_title);?>">
+</div>
+<div class="li-form-group">
+    <label>Conteúdo / Shortcodes</label>
+    <textarea class="li-input" name="page_content" rows="14" style="font-family:monospace;font-size:13px;line-height:1.6;"><?php echo esc_textarea($editing->post_content);?></textarea>
+    <small style="color:var(--li-muted);font-size:11px;margin-top:4px;display:block;">Edite o conteúdo e os shortcodes. As alterações serão refletidas para todos os usuários que acessarem a página.</small>
+</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+    <button type="submit" class="li-btn li-btn-primary">💾 Salvar Página</button>
+    <a href="<?php echo esc_url(get_permalink($editing->ID));?>" target="_blank" class="li-btn li-btn-outline" style="text-decoration:none;">🔗 Ver no site</a>
+    <a href="<?php echo esc_url(get_edit_post_link($editing->ID));?>" target="_blank" class="li-btn li-btn-outline" style="text-decoration:none;">✏️ Editor WordPress</a>
+</div>
+</form>
+</div>
+
+<div style="background:var(--li-card);border:1px solid var(--li-border);border-radius:12px;padding:18px;margin-top:16px;">
+<div style="font-size:12px;font-weight:700;color:var(--li-muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;">💡 Shortcodes disponíveis</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;">
+<?php $shortcodes=[
+    '[ledimov_vitrine]'=>'Vitrine de empreendimentos',
+    '[ledimov_area_corretor]'=>'Portal do corretor',
+    '[ledimov_destaque]'=>'Empreendimentos em destaque',
+    '[ledimov_tabela id="X"]'=>'Tabela de unidades',
+    '[ledimov_mapa id="X"]'=>'Mapa do prédio',
+    '[ledimov_card_imovel id="X"]'=>'Landing page do empreendimento',
+];foreach($shortcodes as $sc=>$desc):?>
+<div title="<?php echo esc_attr($desc);?>" style="background:var(--li-card-2);border:1px solid var(--li-border);border-radius:8px;padding:6px 10px;font-family:monospace;font-size:11px;cursor:pointer;" onclick="liCopyShortcode(this,'<?php echo esc_js($sc);?>')"><?php echo esc_html($sc);?></div>
+<?php endforeach;?>
+</div>
+</div>
+<script>function liCopyShortcode(el,sc){var ta=document.querySelector('textarea[name="page_content"]');if(ta){ta.focus();var pos=ta.selectionEnd;ta.value=ta.value.slice(0,pos)+sc+ta.value.slice(pos);ta.selectionStart=ta.selectionEnd=pos+sc.length;}}</script>
+</div>
+
+<?php else:?>
+<!-- ── Lista de páginas ── -->
+<?php if(empty($pages)):?>
+<div style="background:var(--li-card);border:1px solid var(--li-border);border-radius:12px;padding:28px;text-align:center;">
+<p style="color:var(--li-muted);margin:0;">Nenhuma página LedImov encontrada. <a href="<?php echo admin_url('admin.php?page=ledimov-setup');?>" style="color:var(--li-accent);">Criar páginas →</a></p>
+</div>
+<?php else:?>
+<p style="color:var(--li-muted);margin-bottom:16px;font-size:13px;">Edite o conteúdo e os shortcodes das páginas criadas pelo LedImov. As correções propagam imediatamente para todos os usuários.</p>
+<div class="li-excel-wrap">
+<table class="li-excel">
+<thead><tr><th>Título</th><th>URL</th><th>Conteúdo</th><th>Status</th><th>Ações</th></tr></thead>
+<tbody>
+<?php foreach($pages as $page):$purl=get_permalink($page->ID);$snippet=substr(strip_tags($page->post_content),0,80);?>
+<tr>
+<td><strong><?php echo esc_html($page->post_title);?></strong></td>
+<td><code style="font-size:11px;">/<?php echo esc_html($page->post_name);?></code></td>
+<td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:11px;color:var(--li-muted);"><?php echo esc_html($snippet);?>...</td>
+<td><?php echo $page->post_status==='publish'?'<span class="li-badge li-available">Publicada</span>':'<span class="li-badge li-blocked">'.esc_html($page->post_status).'</span>';?></td>
+<td style="white-space:nowrap;">
+<a href="?page=ledimov-pages&edit_page=<?php echo $page->ID;?>" class="li-btn li-btn-primary" style="font-size:11px;padding:5px 10px;text-decoration:none;">✏️ Editar</a>
+<a href="<?php echo esc_url($purl);?>" target="_blank" class="li-btn li-btn-outline" style="font-size:11px;padding:5px 10px;text-decoration:none;">🔗 Ver</a>
+</td>
+</tr>
+<?php endforeach;?>
+</tbody></table></div>
+<?php endif;?>
+<?php endif;?>
+</div>
+<?php }
+
+/* ============================================================
+   17. ADMIN – CONFIGURAÇÕES
    ============================================================ */
 function ledimov_admin_settings(){$co=ledimov_get_company();?>
 <div class="wrap ledimov-wrap">
