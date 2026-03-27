@@ -7,6 +7,8 @@
  * Text Domain: ledimov
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
+if ( defined( 'LEDIMOV_LOADED' ) ) return;
+define( 'LEDIMOV_LOADED', true );
 
 define( 'LEDIMOV_VERSION', '2.1.0' );
 define( 'LEDIMOV_FILE',    __FILE__ );
