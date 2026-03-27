@@ -7,8 +7,8 @@
  * Text Domain: ledimov
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
-if ( defined( 'LEDIMOV_LOADED' ) ) return;
-define( 'LEDIMOV_LOADED', true );
+/* Evita conflito se outra cópia do plugin já foi carregada */
+if ( function_exists( 'ledimov_activate' ) ) return;
 
 define( 'LEDIMOV_VERSION', '2.1.0' );
 define( 'LEDIMOV_FILE',    __FILE__ );
